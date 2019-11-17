@@ -28,6 +28,18 @@ defmodule Twitter.Server do
     GenServer.call(:twitterServer,{:deleteUser,userId})
   end
 
+  def add_follower(userId,followerId) do
+    GenServer.cast(:twitterServer,{addFollower,userId,followerId})
+  end
+
+  def handle_cast({:addFollower,userId,followerId},state) do
+    if :ets.lookup(:allUsers, followerId) != [] do
+      :ets.insert(:followers,{userId,followerId})
+      :ets.insert(:following,{followerId,userId})
+    end
+    {:noreply,state}
+  end
+
   def handle_call({:registerUser,userId,nTweets},_from,state) do
 
     if :ets.lookup(:allUsers, userId) == [] do
