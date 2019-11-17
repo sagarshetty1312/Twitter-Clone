@@ -9,6 +9,10 @@ defmodule Twitter.Client do
     Twitter.Server.delete_user(userId)
   end
 
+  def send_tweet(userId,tweet) do
+    Twitter.Server.tweet(userId,tweet)
+  end
+
   def start_link(userId,nTweets) do
     {:ok,pid} = GenServer.start_link(__MODULE__, {userId,nTweets})
     {:ok,pid}

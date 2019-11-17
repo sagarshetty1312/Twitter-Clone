@@ -14,7 +14,7 @@ defmodule Twitter.Server do
   def initialise_db() do
     # tweets table can have the client user id as the key
     # and the tweet as the values. Time stamped?
-    :ets.new(:tweets, [:bag,:named_table,:public])
+    :ets.new(:tweetsRecieved, [:bag,:named_table,:public])
     :ets.new(:followers,[:bag,:named_table,:public])
     :ets.new(:following,[:bag,:named_table,:public])
     :ets.new(:allUsers,[:set,:named_table,:public])
@@ -29,15 +29,11 @@ defmodule Twitter.Server do
   end
 
   def add_follower(userId,followerId) do
-    GenServer.cast(:twitterServer,{addFollower,userId,followerId})
+    GenServer.cast(:twitterServer,{:addFollower,userId,followerId})
   end
 
-  def handle_cast({:addFollower,userId,followerId},state) do
-    if :ets.lookup(:allUsers, followerId) != [] do
-      :ets.insert(:followers,{userId,followerId})
-      :ets.insert(:following,{followerId,userId})
-    end
-    {:noreply,state}
+  def tweet(userId,tweet) do
+    GenServer.cast(:twitterServer,{:tweet,userId,tweet})
   end
 
   def handle_call({:registerUser,userId,nTweets},_from,state) do
@@ -46,7 +42,7 @@ defmodule Twitter.Server do
       {:ok,pid} = Twitter.Client.start_link(userId,nTweets)
       :ets.insert(:allUsers,{userId,pid})
       :ets.insert(:following,{userId,[]})
-      :ets.insert(:tweets,{userId,[]})
+      :ets.insert(:tweetsRecieved,{userId,[]})
       if :ets.lookup(:followers, userId) == [ ] do
         :ets.insert(:followers,{userId,[ ]})
       end
@@ -65,7 +61,7 @@ defmodule Twitter.Server do
       :ets.delete(:allUsers,userId)
       :ets.delete(:following,userId)
       :ets.delete(:followers,userId)
-      :ets.delete(:tweets,userId)
+      :ets.delete(:tweetsRecieved,userId)
       "User #{userId} removed"
     else
       "User could not be found"
@@ -73,10 +69,28 @@ defmodule Twitter.Server do
     {:reply,response,state}
   end
 
-
   def handle_call({:getState},_from,state) do
     {:reply,state,state}
   end
+
+  def handle_cast({:tweet,userId,tweet},state) do
+    followers = :ets.lookup(:followers, userId)
+    Enum.each(followers,fn (follower) ->
+      :ets.insert(:tweetsRecieved,{follower,tweet})
+    end)
+    {:noreply,state}
+  end
+
+  def handle_cast({:addFollower,userId,followerId},state) do
+    if :ets.lookup(:allUsers, followerId) != [] do
+      :ets.insert(:followers,{userId,followerId})
+      :ets.insert(:following,{followerId,userId})
+    end
+    {:noreply,state}
+  end
+
+
+
 
   def init(:noargs) do
     {:ok,%{}}
