@@ -14,7 +14,7 @@ defmodule Twitter.Server do
   def initialise_db() do
     # tweets table can have the client user id as the key
     # and the tweet as the values. Time stamped?
-    :ets.new(:tweetsRecieved, [:set,:named_table,:public])
+    :ets.new(:tweetsMade, [:set,:named_table,:public])
     :ets.new(:followers,[:set,:named_table,:public])
     :ets.new(:following,[:set,:named_table,:public])
     :ets.new(:allUsers,[:set,:named_table,:public])
@@ -58,6 +58,11 @@ defmodule Twitter.Server do
     GenServer.cast(:twitterServer,{:tweet,userId,tweet})
   end
 
+  def getTweetsMade(userId) do
+    [tuple] = :ets.lookup(:tweetsMade, userId)
+    elem(tuple,1)
+  end
+
   def handle_call({:registerUser,userId,nTweets},_from,state) do
 
     response=
@@ -65,7 +70,7 @@ defmodule Twitter.Server do
         {:ok,pid} = Twitter.Client.start_link(userId,nTweets)
         :ets.insert(:allUsers,{userId,pid})
         :ets.insert(:following,{userId,[]})
-        :ets.insert(:tweetsRecieved,{userId,[]})
+        :ets.insert(:tweetsMade,{userId,[]})
         if :ets.lookup(:followers, userId) == [ ] do
           :ets.insert(:followers,{userId,[ ]})
       end
@@ -84,7 +89,7 @@ defmodule Twitter.Server do
       :ets.delete(:allUsers,userId)
       :ets.delete(:following,userId)
       :ets.delete(:followers,userId)
-      :ets.delete(:tweetsRecieved,userId)
+      :ets.delete(:tweetsMade,userId)
       "User #{userId} removed"
     else
       "User could not be found"
@@ -97,10 +102,11 @@ defmodule Twitter.Server do
   end
 
   def handle_cast({:tweet,userId,tweet},state) do
-    followers = :ets.lookup(:followers, userId)
-    Enum.each(followers,fn (follower) ->
-      :ets.insert(:tweetsRecieved,{follower,tweet})
-    end)
+    [tuple] = :ets.lookup(:tweetsMade, userId)
+    tweetsList = elem(tuple,1)
+    updatedTweetsList = [tweet | tweetsList]
+    :ets.insert(:tweetsMade,{userId,updatedTweetsList})
+
     {:noreply,state}
   end
 
