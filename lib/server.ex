@@ -14,9 +14,9 @@ defmodule Twitter.Server do
   def initialise_db() do
     # tweets table can have the client user id as the key
     # and the tweet as the values. Time stamped?
-    :ets.new(:tweetsRecieved, [:bag,:named_table,:public])
-    :ets.new(:followers,[:bag,:named_table,:public])
-    :ets.new(:following,[:bag,:named_table,:public])
+    :ets.new(:tweetsRecieved, [:set,:named_table,:public])
+    :ets.new(:followers,[:set,:named_table,:public])
+    :ets.new(:following,[:set,:named_table,:public])
     :ets.new(:allUsers,[:set,:named_table,:public])
   end
 
@@ -28,8 +28,30 @@ defmodule Twitter.Server do
     GenServer.call(:twitterServer,{:deleteUser,userId})
   end
 
-  def add_follower(userId,followerId) do
-    GenServer.cast(:twitterServer,{:addFollower,userId,followerId})
+  def add_follower(userId,tofollowID) do
+    GenServer.cast(:twitterServer,{:addFollower,userId,tofollowID})
+  end
+
+  def get_followers(userId) do
+    [tuple] = :ets.lookup(:followers, userId)
+    elem(tuple,1)
+  end
+
+  def update_followers_list(toFollowId,userId) do
+    followersList = get_followers(toFollowId)
+    updatedFollowersList = [userId|followersList]
+    :ets.insert(:followers,{toFollowId,updatedFollowersList})
+  end
+
+  def get_following(userId) do
+    [tuple] =:ets.lookup(:following, userId)
+    elem(tuple,1)
+  end
+
+  def update_following_list(userId,tofollowID) do
+    followingList = get_following(userId)
+    updatedFollowingList = [tofollowID|followingList]
+    :ets.insert(:following,{userId,updatedFollowingList})
   end
 
   def tweet(userId,tweet) do
@@ -38,20 +60,21 @@ defmodule Twitter.Server do
 
   def handle_call({:registerUser,userId,nTweets},_from,state) do
 
-    if :ets.lookup(:allUsers, userId) == [] do
-      {:ok,pid} = Twitter.Client.start_link(userId,nTweets)
-      :ets.insert(:allUsers,{userId,pid})
-      :ets.insert(:following,{userId,[]})
-      :ets.insert(:tweetsRecieved,{userId,[]})
-      if :ets.lookup(:followers, userId) == [ ] do
-        :ets.insert(:followers,{userId,[ ]})
+    response=
+      if :ets.lookup(:allUsers, userId) == [] do
+        {:ok,pid} = Twitter.Client.start_link(userId,nTweets)
+        :ets.insert(:allUsers,{userId,pid})
+        :ets.insert(:following,{userId,[]})
+        :ets.insert(:tweetsRecieved,{userId,[]})
+        if :ets.lookup(:followers, userId) == [ ] do
+          :ets.insert(:followers,{userId,[ ]})
       end
       "Registration Successfull"
     else
       "Registration Failed: UserID is already in use."
     end
 
-    {:reply,state,state}
+    {:reply,response,state}
 
   end
 
@@ -81,10 +104,10 @@ defmodule Twitter.Server do
     {:noreply,state}
   end
 
-  def handle_cast({:addFollower,userId,followerId},state) do
-    if :ets.lookup(:allUsers, followerId) != [] do
-      :ets.insert(:followers,{userId,followerId})
-      :ets.insert(:following,{followerId,userId})
+  def handle_cast({:addFollower,userId,tofollowID},state) do
+    if :ets.lookup(:allUsers, tofollowID) != [] do
+      update_followers_list(tofollowID,userId)
+      update_following_list(userId,tofollowID)
     end
     {:noreply,state}
   end
