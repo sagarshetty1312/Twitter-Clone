@@ -22,8 +22,8 @@ defmodule Twitter.Client do
     GenServer.call(pid,{:getState})
   end
 
-  def follow_user(userId,followerId) do
-    Twitter.Server.add_follower(userId,followerId)
+  def follow_user(userId,tofollowID) do
+    Twitter.Server.add_follower(userId,tofollowID)
   end
 
   def handle_call({:getState},_from,state) do
