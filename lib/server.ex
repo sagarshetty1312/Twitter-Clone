@@ -18,6 +18,7 @@ defmodule Twitter.Server do
     :ets.new(:followers,[:set,:named_table,:public])
     :ets.new(:following,[:set,:named_table,:public])
     :ets.new(:allUsers,[:set,:named_table,:public])
+    :ets.new(:mentionsAndHashTags, [:set, :public, :named_table])
   end
 
   def register_user(userId,nTweets) do
@@ -63,6 +64,22 @@ defmodule Twitter.Server do
     elem(tuple,1)
   end
 
+  def insert_tag(tag,tweet) do
+    [tuple] =
+      if :ets.lookup(:mentionsAndHashTags, tag) == [] do
+        [nil]
+      else
+        :ets.lookup(:mentionsAndHashTags, tag)
+      end
+    if tuple ==nil do
+      :ets.insert(:mentionsAndHashtags,{tag,tweet})
+    else
+      list = elem(tuple,1)
+      newList = [tweet|list]
+      :ets.insert(:mentionsAndHashtags,{tag,newList})
+    end
+  end
+
   def handle_call({:registerUser,userId,nTweets},_from,state) do
 
     response=
@@ -101,20 +118,30 @@ defmodule Twitter.Server do
     {:reply,state,state}
   end
 
+  def handle_cast({:addFollower,userId,tofollowID},state) do
+    if :ets.lookup(:allUsers, tofollowID) != [] do
+      update_followers_list(tofollowID,userId)
+      update_following_list(userId,tofollowID)
+    end
+    {:noreply,state}
+  end
+
   def handle_cast({:tweet,userId,tweet},state) do
     [tuple] = :ets.lookup(:tweetsMade, userId)
     tweetsList = elem(tuple,1)
     updatedTweetsList = [tweet | tweetsList]
     :ets.insert(:tweetsMade,{userId,updatedTweetsList})
 
-    {:noreply,state}
-  end
+    #hashtags in tweet
+    hashtagsList = Regex.scan(~r/\B#[a-zA-Z0-9_]+/, tweet) |> Enum.concat
+    Enum.each(hashtagsList, fn(hashtag)->
+      insert_tag(hashtag,tweet)
+    end)
 
-  def handle_cast({:addFollower,userId,tofollowID},state) do
-    if :ets.lookup(:allUsers, tofollowID) != [] do
-      update_followers_list(tofollowID,userId)
-      update_following_list(userId,tofollowID)
-    end
+    mentionsList = Regex.scan(~r/\B@[a-zA-Z0-9_]+/, tweet) |> Enum.concat
+    Enum.each(mentionsList, fn(mention) ->
+      insert_tag(mention,tweet)
+    end)
     {:noreply,state}
   end
 
