@@ -1,8 +1,8 @@
 defmodule Twitter.Client do
   use GenServer
 
-  def sign_up(userId,nTweets) do
-    Twitter.Server.register_user(userId,nTweets)
+  def sign_up(userId,nTweets,isOnline) do
+    Twitter.Server.register_user(userId,nTweets,isOnline)
   end
 
   def delete_account(userId) do
@@ -13,8 +13,8 @@ defmodule Twitter.Client do
     Twitter.Server.tweet(userId,tweet)
   end
 
-  def start_link(userId,nTweets) do
-    {:ok,pid} = GenServer.start_link(__MODULE__, {userId,nTweets})
+  def start_link(userId,nTweets,isOnline) do
+    {:ok,pid} = GenServer.start_link(__MODULE__, {userId,nTweets,isOnline},[name: String.to_atom("User"<>Integer.to_string(userId))])
     {:ok,pid}
   end
 
@@ -26,13 +26,15 @@ defmodule Twitter.Client do
     Twitter.Server.add_follower(userId,tofollowID)
   end
 
+
+
   def handle_call({:getState},_from,state) do
     {:reply,state,state}
   end
 
 
-  def init({userId,nTweets}) do
-    {:ok,%{:ID => userId, :nTweets => nTweets}}
+  def init({userId,nTweets,isOnline}) do
+    {:ok,%{:ID => userId, :nTweets => nTweets,:isOnline => isOnline}}
   end
 
 

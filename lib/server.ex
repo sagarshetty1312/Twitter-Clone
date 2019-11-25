@@ -21,8 +21,8 @@ defmodule Twitter.Server do
     :ets.new(:mentionsAndHashTags, [:set, :public, :named_table])
   end
 
-  def register_user(userId,nTweets) do
-    GenServer.call(:twitterServer,{:registerUser,userId,nTweets})
+  def register_user(userId,nTweets,isOnline) do
+    GenServer.call(:twitterServer,{:registerUser,userId,nTweets,isOnline})
   end
 
   def delete_user(userId) do
@@ -80,11 +80,11 @@ defmodule Twitter.Server do
     end
   end
 
-  def handle_call({:registerUser,userId,nTweets},_from,state) do
+  def handle_call({:registerUser,userId,nTweets,isOnline},_from,state) do
 
     response=
       if :ets.lookup(:allUsers, userId) == [] do
-        {:ok,pid} = Twitter.Client.start_link(userId,nTweets)
+        {:ok,pid} = Twitter.Client.start_link(userId,nTweets,isOnline)
         :ets.insert(:allUsers,{userId,pid})
         :ets.insert(:following,{userId,[]})
         :ets.insert(:tweetsMade,{userId,[]})
@@ -132,6 +132,13 @@ defmodule Twitter.Server do
     updatedTweetsList = [tweet | tweetsList]
     :ets.insert(:tweetsMade,{userId,updatedTweetsList})
 
+    followers = get_followers(userId)
+
+
+    # Enum.each(followers, fn(follower) ->
+    #       send(follower , {:tweet, [tweet] ++ ["-Tweet from user: "] ++ [user_pid] ++ ["forwarded to follower: "] ++ [follower_pid] })
+    #      end)
+
     #hashtags in tweet
     hashtagsList = Regex.scan(~r/\B#[a-zA-Z0-9_]+/, tweet) |> Enum.concat
     Enum.each(hashtagsList, fn(hashtag)->
@@ -142,6 +149,7 @@ defmodule Twitter.Server do
     Enum.each(mentionsList, fn(mention) ->
       insert_tag(mention,tweet)
     end)
+
     {:noreply,state}
   end
 
