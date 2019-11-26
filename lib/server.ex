@@ -25,6 +25,14 @@ defmodule Twitter.Server do
     GenServer.call(:twitterServer,{:registerUser,userId,nTweets,isOnline})
   end
 
+  def loginUser(userId,nTweets,isOnline) do
+    GenServer.call(:twitterServer,{:loginUser,userId,nTweets,isOnline})
+  end
+
+  def logoutUser(userId,nTweets,isOnline) do
+    GenServer.call(:twitterServer,{:logoutUser,userId,nTweets,isOnline})
+  end
+
   def delete_user(userId) do
     GenServer.call(:twitterServer,{:deleteUser,userId})
   end
@@ -59,6 +67,10 @@ defmodule Twitter.Server do
     GenServer.cast(:twitterServer,{:tweet,userId,tweet})
   end
 
+  def retweet(userId,tweet) do
+    GenServer.cast(:twitterServer,{:tweet,userId,"RT:"<>tweet})
+  end
+
   def getTweetsMade(userId) do
     [tuple] = :ets.lookup(:tweetsMade, userId)
     elem(tuple,1)
@@ -81,7 +93,6 @@ defmodule Twitter.Server do
   end
 
   def handle_call({:registerUser,userId,nTweets,isOnline},_from,state) do
-
     response=
       if :ets.lookup(:allUsers, userId) == [] do
         {:ok,pid} = Twitter.Client.start_link(userId,nTweets,isOnline)
@@ -95,9 +106,35 @@ defmodule Twitter.Server do
     else
       "Registration Failed: UserID is already in use."
     end
-
     {:reply,response,state}
+  end
 
+  def handle_call({:loginUser,userId,nTweets,isOnline},_from,state) do
+    response=
+      if :ets.lookup(:allUsers, userId) == [] do
+        "User: #{userId} not found. Login failed."
+      else
+        [_,pid] = :ets.lookup(:allUsers, userId)
+        if pid == nil do
+          {:ok,pid} = Twitter.Client.start_link(userId,nTweets,true)
+          :ets.insert(:allUsers,{userId,pid})
+        end
+        "User #{userId} logged out successfully."
+      end
+    {:reply,response,state}
+  end
+
+  def handle_call({:logoutUser,userId,nTweets,isOnline},_from,state) do
+    response=
+      if :ets.lookup(:allUsers, userId) == [] do
+        "User: #{userId} not found. Logout failed."
+      else
+        [_,pid] = :ets.lookup(:allUsers, userId)
+        Process.exit(pid,:kill)
+        :ets.insert(:allUsers,{userId,nil})
+        "User #{userId} logged out successfully."
+      end
+    {:reply,response,state}
   end
 
   def handle_call({:deleteUser,userId},_from,state) do
@@ -135,9 +172,9 @@ defmodule Twitter.Server do
     followers = get_followers(userId)
 
 
-    # Enum.each(followers, fn(follower) ->
-    #       send(follower , {:tweet, [tweet] ++ ["-Tweet from user: "] ++ [user_pid] ++ ["forwarded to follower: "] ++ [follower_pid] })
-    #      end)
+  #  Enum.each(followers, fn(follower) ->
+  #       send(follower , {:tweet, [tweet] ++ ["-Tweet from user: "] ++ [user_pid] ++ ["forwarded to follower: "] ++ [follower_pid] })
+  #      end)
 
     #hashtags in tweet
     hashtagsList = Regex.scan(~r/\B#[a-zA-Z0-9_]+/, tweet) |> Enum.concat
@@ -150,11 +187,12 @@ defmodule Twitter.Server do
       insert_tag(mention,tweet)
     end)
 
+  #  Enum.each(mentionsList, fn(follower) ->
+  #       send(follower , {:tweet, [tweet] ++ ["-Tweet from user: "] ++ [user_pid] ++ ["forwarded to follower: "] ++ [follower_pid] })
+  #      end)
+
     {:noreply,state}
   end
-
-
-
 
   def init(:noargs) do
     {:ok,%{}}
