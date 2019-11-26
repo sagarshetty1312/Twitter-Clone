@@ -4,7 +4,7 @@ defmodule Twitter.Client do
   def sign_up(userId,nTweets,isOnline) do
     Twitter.Server.register_user(userId,nTweets,isOnline)
   end
-  
+
   def login(userId,nTweets,isOnline) do
     Twitter.Server.loginUser(userId,nTweets,isOnline)
   end
@@ -42,7 +42,15 @@ defmodule Twitter.Client do
     {:reply,state,state}
   end
 
+  def handleLiveTweets() do
+    receive do
+      {:tweetLive,tweet} -> IO.puts "Live tweet: #{tweet}"
+    end
+    handleLiveTweets()
+  end
+
   def init({userId,nTweets,isOnline}) do
+    handleLiveTweets()
     {:ok,%{:ID => userId, :nTweets => nTweets,:isOnline => isOnline}}
   end
 end

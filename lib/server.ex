@@ -170,8 +170,7 @@ defmodule Twitter.Server do
     :ets.insert(:tweetsMade,{userId,updatedTweetsList})
 
     followers = get_followers(userId)
-
-
+    tweetLive(tweet, followers, userId)
   #  Enum.each(followers, fn(follower) ->
   #       send(follower , {:tweet, [tweet] ++ ["-Tweet from user: "] ++ [user_pid] ++ ["forwarded to follower: "] ++ [follower_pid] })
   #      end)
@@ -186,12 +185,22 @@ defmodule Twitter.Server do
     Enum.each(mentionsList, fn(mention) ->
       insert_tag(mention,tweet)
     end)
+    tweetLive(tweet, mentionsList, userId)
 
   #  Enum.each(mentionsList, fn(follower) ->
   #       send(follower , {:tweet, [tweet] ++ ["-Tweet from user: "] ++ [user_pid] ++ ["forwarded to follower: "] ++ [follower_pid] })
   #      end)
 
     {:noreply,state}
+  end
+
+  def tweetLive(tweet, userList, userId) do
+    Enum.each(userList, fn(toUser) ->
+      [_,pid] = :ets.lookup(:allUsers, toUser)
+      if pid == nil do
+        send(pid , {:tweetLive, tweet<>"-Tweet from: "<>userId})
+      end
+    end)
   end
 
   def init(:noargs) do
