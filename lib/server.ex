@@ -200,8 +200,8 @@ defmodule Twitter.Server do
 
   def tweetLive(tweet, userList, userId) do
     Enum.each(userList, fn(toUser) ->
-      [_,pid] = :ets.lookup(:allUsers, toUser)
-      if pid != nil do
+      [_,_,state] = :ets.lookup(:allUsers, toUser)
+      if state == :online do
         #send(pid , {:tweetLive, tweet<>"-Tweet from: "<>userId})
         GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)),{:tweetLive,"RT:"<>tweet})
       end
