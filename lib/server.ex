@@ -7,6 +7,10 @@ defmodule Twitter.Server do
     {:ok,pid}
   end
 
+  def init(:noargs) do
+    {:ok,%{}}
+  end
+
   def get_state(pid) do
     GenServer.call(pid,{:getState})
   end
@@ -21,17 +25,17 @@ defmodule Twitter.Server do
     :ets.new(:mentionsAndHashTags, [:set, :public, :named_table])
   end
 
-  def register_user(userId,nTweets,isOnline) do
-    GenServer.call(:twitterServer,{:registerUser,userId,nTweets,isOnline})
-  end
+  #def register_user(userId,nTweets,isOnline) do
+  #  GenServer.call(:twitterServer,{:registerUser,userId,nTweets,isOnline})
+  #end
 
-  def loginUser(userId,nTweets,isOnline) do
-    GenServer.call(:twitterServer,{:loginUser,userId,nTweets,isOnline})
-  end
+  #def loginUser(userId,nTweets,isOnline) do
+  #  GenServer.call(:twitterServer,{:loginUser,userId,nTweets})
+  #end
 
-  def logoutUser(userId,nTweets,isOnline) do
-    GenServer.call(:twitterServer,{:logoutUser,userId,nTweets,isOnline})
-  end
+  #def logoutUser(userId,nTweets,isOnline) do
+  #  GenServer.call(:twitterServer,{:logoutUser,userId,nTweets})
+  #end
 
   def delete_user(userId) do
     GenServer.call(:twitterServer,{:deleteUser,userId})
@@ -96,43 +100,43 @@ defmodule Twitter.Server do
     response=
       if :ets.lookup(:allUsers, userId) == [] do
         {:ok,pid} = Twitter.Client.start_link(userId,nTweets,isOnline)
-        :ets.insert(:allUsers,{userId,pid})
+        :ets.insert(:allUsers,{userId,pid,:online})
         :ets.insert(:following,{userId,[]})
         :ets.insert(:tweetsMade,{userId,[]})
         if :ets.lookup(:followers, userId) == [ ] do
           :ets.insert(:followers,{userId,[ ]})
       end
-      "Registration Successfull"
+      #"Registration Successfull"
+      "Registration Successful with Id: user#{userId}"
     else
-      "Registration Failed: UserID is already in use."
+      "Registration Failed. UserID: user#{userId} is already in use."
     end
     {:reply,response,state}
   end
 
-  def handle_call({:loginUser,userId,nTweets,isOnline},_from,state) do
+  def handle_call({:loginUser,userId,nTweets},_from,state) do
     response=
       if :ets.lookup(:allUsers, userId) == [] do
         "User: #{userId} not found. Login failed."
       else
-        [_,pid] = :ets.lookup(:allUsers, userId)
-        if pid == nil do
-          {:ok,pid} = Twitter.Client.start_link(userId,nTweets,true)
-          :ets.insert(:allUsers,{userId,pid})
+        [{_,pid,state}] = :ets.lookup(:allUsers, userId)
+        if state == :offline do
+          #{:ok,pid} = Twitter.Client.start_link(userId,nTweets,true)
+          :ets.insert(:allUsers,{userId,pid,:online})
+          GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)),{:login,userId})
         end
-        "User #{userId} logged out successfully."
       end
     {:reply,response,state}
   end
 
-  def handle_call({:logoutUser,userId,nTweets,isOnline},_from,state) do
+  def handle_call({:logoutUser,userId,nTweets},_from,state) do
     response=
       if :ets.lookup(:allUsers, userId) == [] do
-        "User: #{userId} not found. Logout failed."
+        "User Id: user#{userId} not found. Logout failed."
       else
-        [_,pid] = :ets.lookup(:allUsers, userId)
-        Process.exit(pid,:kill)
-        :ets.insert(:allUsers,{userId,nil})
-        "User #{userId} logged out successfully."
+         [{_,pid,state}] = :ets.lookup(:allUsers, userId)
+        :ets.insert(:allUsers,{userId,pid,:offline})
+        GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)),{:logout,userId})
       end
     {:reply,response,state}
   end
@@ -197,14 +201,11 @@ defmodule Twitter.Server do
   def tweetLive(tweet, userList, userId) do
     Enum.each(userList, fn(toUser) ->
       [_,pid] = :ets.lookup(:allUsers, toUser)
-      if pid == nil do
-        send(pid , {:tweetLive, tweet<>"-Tweet from: "<>userId})
+      if pid != nil do
+        #send(pid , {:tweetLive, tweet<>"-Tweet from: "<>userId})
+        GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)),{:tweetLive,"RT:"<>tweet})
       end
     end)
-  end
-
-  def init(:noargs) do
-    {:ok,%{}}
   end
 
 end
