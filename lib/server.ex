@@ -7,6 +7,10 @@ defmodule Twitter.Server do
     {:ok,pid}
   end
 
+  def init(:noargs) do
+    {:ok,%{}}
+  end
+
   def get_state(pid) do
     GenServer.call(pid,{:getState})
   end
@@ -21,9 +25,17 @@ defmodule Twitter.Server do
     :ets.new(:mentionsAndHashTags, [:set, :public, :named_table])
   end
 
-  def register_user(userId,nTweets,isOnline) do
-    GenServer.call(:twitterServer,{:registerUser,userId,nTweets,isOnline})
-  end
+  #def register_user(userId,nTweets,isOnline) do
+  #  GenServer.call(:twitterServer,{:registerUser,userId,nTweets,isOnline})
+  #end
+
+  #def loginUser(userId,nTweets,isOnline) do
+  #  GenServer.call(:twitterServer,{:loginUser,userId,nTweets})
+  #end
+
+  #def logoutUser(userId,nTweets,isOnline) do
+  #  GenServer.call(:twitterServer,{:logoutUser,userId,nTweets})
+  #end
 
   def delete_user(userId) do
     GenServer.call(:twitterServer,{:deleteUser,userId})
@@ -59,6 +71,10 @@ defmodule Twitter.Server do
     GenServer.cast(:twitterServer,{:tweet,userId,tweet})
   end
 
+  def retweet(userId,tweet) do
+    GenServer.cast(:twitterServer,{:tweet,userId,"RT:"<>tweet})
+  end
+
   def getTweetsMade(userId) do
     [tuple] = :ets.lookup(:tweetsMade, userId)
     elem(tuple,1)
@@ -81,23 +97,48 @@ defmodule Twitter.Server do
   end
 
   def handle_call({:registerUser,userId,nTweets,isOnline},_from,state) do
-
     response=
       if :ets.lookup(:allUsers, userId) == [] do
         {:ok,pid} = Twitter.Client.start_link(userId,nTweets,isOnline)
-        :ets.insert(:allUsers,{userId,pid})
+        :ets.insert(:allUsers,{userId,pid,:online})
         :ets.insert(:following,{userId,[]})
         :ets.insert(:tweetsMade,{userId,[]})
         if :ets.lookup(:followers, userId) == [ ] do
           :ets.insert(:followers,{userId,[ ]})
       end
-      "Registration Successfull"
+      #"Registration Successfull"
+      "Registration Successful with Id: user#{userId}"
     else
-      "Registration Failed: UserID is already in use."
+      "Registration Failed. UserID: user#{userId} is already in use."
     end
-
     {:reply,response,state}
+  end
 
+  def handle_call({:loginUser,userId,nTweets},_from,state) do
+    response=
+      if :ets.lookup(:allUsers, userId) == [] do
+        "User: #{userId} not found. Login failed."
+      else
+        [{_,pid,state}] = :ets.lookup(:allUsers, userId)
+        if state == :offline do
+          #{:ok,pid} = Twitter.Client.start_link(userId,nTweets,true)
+          :ets.insert(:allUsers,{userId,pid,:online})
+          GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)),{:login,userId})
+        end
+      end
+    {:reply,response,state}
+  end
+
+  def handle_call({:logoutUser,userId,nTweets},_from,state) do
+    response=
+      if :ets.lookup(:allUsers, userId) == [] do
+        "User Id: user#{userId} not found. Logout failed."
+      else
+         [{_,pid,state}] = :ets.lookup(:allUsers, userId)
+        :ets.insert(:allUsers,{userId,pid,:offline})
+        GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)),{:logout,userId})
+      end
+    {:reply,response,state}
   end
 
   def handle_call({:deleteUser,userId},_from,state) do
@@ -133,11 +174,10 @@ defmodule Twitter.Server do
     :ets.insert(:tweetsMade,{userId,updatedTweetsList})
 
     followers = get_followers(userId)
-
-
-    # Enum.each(followers, fn(follower) ->
-    #       send(follower , {:tweet, [tweet] ++ ["-Tweet from user: "] ++ [user_pid] ++ ["forwarded to follower: "] ++ [follower_pid] })
-    #      end)
+    tweetLive(tweet, followers, userId)
+  #  Enum.each(followers, fn(follower) ->
+  #       send(follower , {:tweet, [tweet] ++ ["-Tweet from user: "] ++ [user_pid] ++ ["forwarded to follower: "] ++ [follower_pid] })
+  #      end)
 
     #hashtags in tweet
     hashtagsList = Regex.scan(~r/\B#[a-zA-Z0-9_]+/, tweet) |> Enum.concat
@@ -149,15 +189,23 @@ defmodule Twitter.Server do
     Enum.each(mentionsList, fn(mention) ->
       insert_tag(mention,tweet)
     end)
+    tweetLive(tweet, mentionsList, userId)
+
+  #  Enum.each(mentionsList, fn(follower) ->
+  #       send(follower , {:tweet, [tweet] ++ ["-Tweet from user: "] ++ [user_pid] ++ ["forwarded to follower: "] ++ [follower_pid] })
+  #      end)
 
     {:noreply,state}
   end
 
-
-
-
-  def init(:noargs) do
-    {:ok,%{}}
+  def tweetLive(tweet, userList, userId) do
+    Enum.each(userList, fn(toUser) ->
+      [_,_,state] = :ets.lookup(:allUsers, toUser)
+      if state == :online do
+        #send(pid , {:tweetLive, tweet<>"-Tweet from: "<>userId})
+        GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)),{:tweetLive,"RT:"<>tweet})
+      end
+    end)
   end
 
 end
