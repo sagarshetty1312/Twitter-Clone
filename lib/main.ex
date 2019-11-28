@@ -12,9 +12,13 @@ defmodule Twitter.Main do
     :timer.sleep(1000)
     tweetRandom(userList,nTweets)
     tweetwithHashtag(userList,"#COP5615 is great")
-    tweetToRandUser(userList,userList)
-    :timer.sleep(1000)
-    GenServer.cast(:twitterServer, {:displayAllMentionsAndHashtags, "#COP5615"})
+    usersMentioned = tweetToRandUser(userList,userList)
+    :timer.sleep(2000)
+    queryByMention(usersMentioned)
+    randUser = Enum.random(userList)
+    {_,list,_} = queryByHashtag(randUser,"#COP5615")
+    retweetTweets(randUser,list)
+    #GenServer.cast(:twitterServer, {:displayAllMentionsAndHashtags, "#COP5615"})
     #for i <- userList, do: GenServer.cast(:twitterServer, {:displayAllFollowing, i})
     :timer.sleep(:infinity)
   end
@@ -36,7 +40,7 @@ defmodule Twitter.Main do
       true -> List.delete(userList, userId)
     end
   end
-  
+
   def logoutUsers(userList, 0) do
     IO.puts "Logged out the users"
     []
@@ -111,7 +115,7 @@ defmodule Twitter.Main do
   end
 
   def tweetToRandUser([],userList) do
-
+    []
   end
 
   def tweetToRandUser(usersLeft,userList) do
@@ -119,6 +123,32 @@ defmodule Twitter.Main do
     toUser = Enum.random(userList)
     tweet = "Hello there @User#{toUser}."
     GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)), {:sendTweet, tweet})
-    tweetToRandUser(tail,usersLeft)
+    [toUser|tweetToRandUser(tail,usersLeft)]
+  end
+
+  def queryByMention([]) do
+    []
+  end
+
+  def queryByMention(userList) do
+    [userId|tail] = userList
+    key = "User"<>Integer.to_string(userId)
+    GenServer.call(String.to_atom("User"<>Integer.to_string(userId)), {:queryTweet, "@"<>key})
+    queryByMention(tail)
+  end
+
+  def queryByHashtag(userId,key) do
+    GenServer.call(String.to_atom("User"<>Integer.to_string(userId)), {:queryTweet, key})
+  end
+
+  def retweetTweets(_randUser,[]) do
+    []
+  end
+
+  def retweetTweets(userId,tweetList) do
+    [head|tail] = tweetList
+    IO.puts "Tweet: #{head} User: #{userId}"
+    GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)), {:sendRetweet, head})
+    retweetTweets(userId,tail)
   end
 end
