@@ -22,7 +22,7 @@ defmodule Twitter.Server do
     :ets.new(:followers,[:set,:named_table,:public])
     :ets.new(:following,[:set,:named_table,:public])
     :ets.new(:allUsers,[:set,:named_table,:public])
-    :ets.new(:mentionsAndHashTags, [:set, :public, :named_table])
+    :ets.new(:mentionsHashtags, [:set, :public, :named_table])
   end
 
   #def register_user(userId,nTweets,isOnline) do
@@ -41,9 +41,9 @@ defmodule Twitter.Server do
     GenServer.call(:twitterServer,{:deleteUser,userId})
   end
 
-  def add_follower(userId,tofollowID) do
-    GenServer.cast(:twitterServer,{:addFollower,userId,tofollowID})
-  end
+  #def add_follower(userId,tofollowID) do
+  #  GenServer.cast(:twitterServer,{:addFollower,userId,tofollowID})
+  #end
 
   def get_followers(userId) do
     [tuple] = :ets.lookup(:followers, userId)
@@ -82,17 +82,17 @@ defmodule Twitter.Server do
 
   def insert_tag(tag,tweet) do
     [tuple] =
-      if :ets.lookup(:mentionsAndHashTags, tag) == [] do
+      if :ets.lookup(:mentionsHashtags, tag) == [] do
         [nil]
       else
-        :ets.lookup(:mentionsAndHashTags, tag)
+        :ets.lookup(:mentionsHashtags, tag)
       end
     if tuple ==nil do
-      :ets.insert(:mentionsAndHashtags,{tag,tweet})
+      :ets.insert(:mentionsHashtags,{tag,[tweet]})
     else
       list = elem(tuple,1)
       newList = [tweet|list]
-      :ets.insert(:mentionsAndHashtags,{tag,newList})
+      :ets.insert(:mentionsHashtags,{tag,newList})
     end
   end
 
@@ -159,6 +159,24 @@ defmodule Twitter.Server do
     {:reply,state,state}
   end
 
+  def handle_cast({:displayAllFollowing,userId},state) do
+    if :ets.lookup(:allUsers, userId) != [] do
+      [{_,list}] = :ets.lookup(:following, userId)
+      IO.puts "user#{userId} follows:"
+      IO.inspect list
+    end
+    {:noreply,state}
+  end
+
+  def handle_cast({:displayAllMentionsAndHashtags, key},state) do
+    if :ets.lookup(:mentionsHashtags, key) != [] do
+      [{_,list}] = :ets.lookup(:mentionsHashtags, key)
+      IO.puts "List of #{key}:"
+      IO.inspect list
+    end
+    {:noreply,state}
+  end
+
   def handle_cast({:addFollower,userId,tofollowID},state) do
     if :ets.lookup(:allUsers, tofollowID) != [] do
       update_followers_list(tofollowID,userId)
@@ -185,25 +203,44 @@ defmodule Twitter.Server do
       insert_tag(hashtag,tweet)
     end)
 
-    mentionsList = Regex.scan(~r/\B@[a-zA-Z0-9_]+/, tweet) |> Enum.concat
+    mentionsList = Regex.scan(~r/\B@User[0-9]+/, tweet) |> Enum.concat
     Enum.each(mentionsList, fn(mention) ->
       insert_tag(mention,tweet)
     end)
-    tweetLive(tweet, mentionsList, userId)
+    mentionedUserIds = Enum.map(mentionsList,fn x -> String.slice(x,5..-1) |> String.to_integer end)
+    validUserIds = checkForExistence(mentionedUserIds)
+    tweetLive(tweet, validUserIds, userId)
+
+    #mentionsList = Regex.scan(~r/\B@User[a-zA-Z0-9_]+/, tweet) |> Enum.concat
+    #Enum.each(mentionsList, fn(mention) ->
+    #  insert_tag(mention,tweet)
+    #end)
 
   #  Enum.each(mentionsList, fn(follower) ->
   #       send(follower , {:tweet, [tweet] ++ ["-Tweet from user: "] ++ [user_pid] ++ ["forwarded to follower: "] ++ [follower_pid] })
   #      end)
-
+    #IO.puts "Tweet: #{tweet} processed successfully."
     {:noreply,state}
+  end
+
+  def checkForExistence([]) do
+    []
+  end
+
+  def checkForExistence(mentionedUserIds) do
+    [head|tail] = mentionedUserIds
+    cond do
+      :ets.lookup(:allUsers, head) == [] -> checkForExistence(tail)
+      true -> [head | checkForExistence(tail)]
+    end
   end
 
   def tweetLive(tweet, userList, userId) do
     Enum.each(userList, fn(toUser) ->
-      [_,_,state] = :ets.lookup(:allUsers, toUser)
+      [{_,_,state}] = :ets.lookup(:allUsers, toUser)
       if state == :online do
         #send(pid , {:tweetLive, tweet<>"-Tweet from: "<>userId})
-        GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)),{:tweetLive,"RT:"<>tweet})
+        GenServer.cast(String.to_atom("User"<>Integer.to_string(toUser)),{:tweetLive,"User#{toUser} received: "<>tweet})
       end
     end)
   end
