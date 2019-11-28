@@ -80,6 +80,11 @@ defmodule Twitter.Client do
     {:ok,pid}
   end
 
+  def start_link(userId,nTweets,isOnline) do
+    {:ok,pid} = GenServer.start_link(__MODULE__, {userId,nTweets,isOnline},[name: String.to_atom("User"<>Integer.to_string(userId))])
+    {:ok,pid}
+  end
+
   def init({userId,nTweets,isOnline}) do
     #handleLiveTweets()
     {:ok,{userId, nTweets, isOnline}}

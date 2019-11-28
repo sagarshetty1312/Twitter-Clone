@@ -36,7 +36,7 @@ defmodule Twitter.Main do
       true -> List.delete(userList, userId)
     end
   end
-
+  
   def logoutUsers(userList, 0) do
     IO.puts "Logged out the users"
     []
@@ -121,5 +121,4 @@ defmodule Twitter.Main do
     GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)), {:sendTweet, tweet})
     tweetToRandUser(tail,usersLeft)
   end
-
 end
