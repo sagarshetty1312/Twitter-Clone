@@ -68,11 +68,24 @@ defmodule Twitter.Client do
     {:noreply, {userId, nTweets, true}}
   end
 
+  def handle_cast({:sendRetweet,tweet},state) do
+    {userId, nTweets, isOnline} = state
+    GenServer.cast(:twitterServer,{:tweet,userId,tweet<>"-RT'd by User#{userId}"})
+    IO.puts "User#{userId} retweeted \"#{tweet}-RT'd by User#{userId}\""
+    {:noreply, {userId, nTweets, true}}
+  end
+
   def handle_cast({:sendTweet,tweet},state) do
     {userId, nTweets, isOnline} = state
     GenServer.cast(:twitterServer,{:tweet,userId,tweet<>"-by User#{userId}"})
-    IO.puts "User#{userId} tweeted \"#{tweet}\""
+    IO.puts "User#{userId} tweeted \"#{tweet}-by User#{userId}\""
     {:noreply, {userId, nTweets, true}}
+  end
+
+  def handle_call({:queryTweet,key},_,state) do
+    {userId, nTweets, isOnline} = state
+    list = GenServer.call(:twitterServer,{:fetchAllMentionsAndHashtags,key})
+    {:reply, state, {userId, list, isOnline}}
   end
 
   def start_link(userId,nTweets,isOnline) do
@@ -87,6 +100,6 @@ defmodule Twitter.Client do
 
   def init({userId,nTweets,isOnline}) do
     #handleLiveTweets()
-    {:ok,{userId, nTweets, isOnline}}
+    {:ok,{userId, [], isOnline}}
   end
 end

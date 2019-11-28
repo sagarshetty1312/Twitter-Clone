@@ -67,13 +67,13 @@ defmodule Twitter.Server do
     :ets.insert(:following,{userId,updatedFollowingList})
   end
 
-  def tweet(userId,tweet) do
-    GenServer.cast(:twitterServer,{:tweet,userId,tweet})
-  end
+  #def tweet(userId,tweet) do
+  #  GenServer.cast(:twitterServer,{:tweet,userId,tweet})
+  #end
 
-  def retweet(userId,tweet) do
-    GenServer.cast(:twitterServer,{:tweet,userId,"RT:"<>tweet})
-  end
+  #def retweet(userId,tweet) do
+  #  GenServer.cast(:twitterServer,{:tweet,userId,"RT:"<>tweet})
+  #end
 
   def getTweetsMade(userId) do
     [tuple] = :ets.lookup(:tweetsMade, userId)
@@ -175,6 +175,16 @@ defmodule Twitter.Server do
       IO.inspect list
     end
     {:noreply,state}
+  end
+
+  def handle_call({:fetchAllMentionsAndHashtags, key},_, state) do
+    list = if :ets.lookup(:mentionsHashtags, key) != [] do
+      [{_,list}] = :ets.lookup(:mentionsHashtags, key)
+      list
+    else
+      []
+    end
+    {:reply,state,list}
   end
 
   def handle_cast({:addFollower,userId,tofollowID},state) do
