@@ -17,9 +17,9 @@ defmodule Twitter.Client do
     Twitter.Server.delete_user(userId)
   end
 
-  def send_tweet(userId,tweet) do
-    Twitter.Server.tweet(userId,tweet)
-  end
+  #def send_tweet(userId,tweet) do
+  #  Twitter.Server.tweet(userId,tweet)
+  #end
 
   def send_retweet(userId, tweet) do
     Twitter.Server.retweet(userId,tweet)
@@ -37,28 +37,47 @@ defmodule Twitter.Client do
     {:reply,state,state}
   end
 
-  def handle_cast({:tweetLive,tweet},_from,state) do
-    IO.puts "Live tweet: #{tweet}"
-    {:noreply, state}
+  def handle_cast({:tweetLive,tweet},state) do
+    {userId, nTweets, isOnline} = state
+    if isOnline == true do
+      IO.puts "#{tweet}"
+    end
+    {:noreply, {userId, nTweets, false}}
   end
 
   def handle_cast({:logout,userId},state) do
     {userId, nTweets, isOnline} = state
-    IO.puts "User logged out: user#{userId}"
+    IO.puts "User logged out: User#{userId}"
     {:noreply, {userId, nTweets, false}}
   end
 
   def handle_cast({:login,userId},state) do
     {userId, nTweets, isOnline} = state
-    IO.puts "User logged in: user#{userId}"
+    IO.puts "User logged in: User#{userId}"
     {:noreply, {userId, nTweets, true}}
   end
 
-  def handleLiveTweets() do
-    receive do
-      {:tweetLive,tweet} -> IO.puts "Live tweet: #{tweet}"
+  def handle_cast({:subscribe, toFollowId},state) do
+    {userId, nTweets, isOnline} = state
+    if toFollowId != userId do
+      GenServer.cast(:twitterServer,{:addFollower,userId,toFollowId})
+      IO.puts "User#{userId} followed User#{toFollowId}."
+    else
+      IO.puts
     end
-    handleLiveTweets()
+    {:noreply, {userId, nTweets, true}}
+  end
+
+  def handle_cast({:sendTweet,tweet},state) do
+    {userId, nTweets, isOnline} = state
+    GenServer.cast(:twitterServer,{:tweet,userId,tweet<>"-by User#{userId}"})
+    IO.puts "User#{userId} tweeted \"#{tweet}\""
+    {:noreply, {userId, nTweets, true}}
+  end
+
+  def start_link(userId,nTweets,isOnline) do
+    {:ok,pid} = GenServer.start_link(__MODULE__, {userId,nTweets,isOnline},[name: String.to_atom("User"<>Integer.to_string(userId))])
+    {:ok,pid}
   end
 
   def start_link(userId,nTweets,isOnline) do
