@@ -1,28 +1,8 @@
 defmodule Twitter.Client do
   use GenServer
 
-  #def sign_up(userId,nTweets,isOnline) do
-  #  Twitter.Server.register_user(userId,nTweets,isOnline)
-  #end
-
-  #def login(userId,nTweets,isOnline) do
-  #  Twitter.Server.loginUser(userId,nTweets)
-  #end
-
-  #def logout(userId,nTweets) do
-  #  Twitter.Server.logoutUser(userId,nTweets)
-  #end
-
   def delete_account(userId) do
     Twitter.Server.delete_user(userId)
-  end
-
-  #def send_tweet(userId,tweet) do
-  #  Twitter.Server.tweet(userId,tweet)
-  #end
-
-  def send_retweet(userId, tweet) do
-    Twitter.Server.retweet(userId,tweet)
   end
 
   def tweet(userId,tweet) do
@@ -44,8 +24,8 @@ defmodule Twitter.Client do
   end
 
   def queryMentions(userId) do
-    key = "User"<>Integer.to_string(2)
-    {_,mentionsList, _} = GenServer.call(String.to_atom("User"<>Integer.to_string(2)), {:queryTweet, "@"<>key})
+    key = "User"<>Integer.to_string(userId)
+    {_,mentionsList, _} = GenServer.call(String.to_atom("User"<>Integer.to_string(userId)), {:queryTweet, "@"<>key})
     mentionsList
   end
 
@@ -58,11 +38,11 @@ defmodule Twitter.Client do
     if isOnline == true do
       IO.puts "#{tweet}"
     end
-    {:noreply, {userId, nTweets, false}}
+    {:noreply, {userId, nTweets, true}}
   end
 
-  def handle_cast({:logout,userId},state) do
-    {userId, nTweets, isOnline} = state
+  def handle_cast({:logout,_userId},state) do
+    {userId, nTweets, _isOnline} = state
     IO.puts "User logged out: User#{userId}"
     {:noreply, {userId, nTweets, false}}
   end

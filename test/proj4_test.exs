@@ -13,7 +13,7 @@ defmodule Proj4Test do
     assert :ets.whereis(:followers) != :undefined
     assert :ets.whereis(:following) != :undefined
     assert :ets.whereis(:mentionsHashtags) != :undefined
-    IO.puts "Tables where created successfully"
+    IO.puts "Tables were created successfully"
     IO.puts "####################################################"
   end
 
@@ -158,6 +158,7 @@ defmodule Proj4Test do
     Twitter.Server.logout_user(1)
     {_,_,status} = Twitter.Client.get_state(1)
     assert status == false #verify whether the state of the client gets updated to false
+    :timer.sleep(10)
     IO.puts "#########################################################"
     IO.puts " "
   end
@@ -208,6 +209,7 @@ defmodule Proj4Test do
     mentions = Twitter.Client.queryMentions(2)
     #Print out all the tweets that mentioned user 2
     Enum.each(mentions,fn mention -> IO.puts(mention) end)
+    :timer.sleep(10)
   end
 
 

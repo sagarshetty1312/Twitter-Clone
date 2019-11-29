@@ -138,7 +138,7 @@ defmodule Twitter.Server do
     {:reply,response,state}
   end
 
-  def handle_call({:logoutUser,userId,nTweets},_from,state) do
+  def handle_call({:logoutUser,userId,_nTweets},_from,state) do
     response=
       if :ets.lookup(:allUsers, userId) == [] do
         "User Id: user#{userId} not found. Logout failed."
