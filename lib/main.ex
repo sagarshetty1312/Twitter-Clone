@@ -1,23 +1,65 @@
 defmodule Twitter.Main do
 
-  def start(numUsers,nTweets,isOnline) do
+  def start(numUsers,nTweets) do
+    :global.register_name(:main, self())
     {:ok,pid} = Twitter.Server.start_link()
+    IO.puts "Server started with pid #{inspect pid}"
     numToLogout = round(numUsers/2)
     userList = Enum.to_list(1..numUsers)
+
     #Simulation functions
+    startTime = System.system_time(:millisecond)
     create_users(numUsers,nTweets,true)
+    waitFor(:userCreationResp, numUsers)
+    timeDiff = System.system_time(:millisecond) - startTime
+    IO.puts "Created #{numUsers}users in #{timeDiff}ms"
+
+    startTime = System.system_time(:millisecond)
     listLoggedOut = logoutUsers(userList, numToLogout)
+    waitFor(:userLogoutResp, numToLogout)
+    timeDiff = System.system_time(:millisecond) - startTime
+    IO.puts "Logged out #{numToLogout} random users in #{timeDiff}ms"
+
+    startTime = System.system_time(:millisecond)
     loginUsers(listLoggedOut)
+    waitFor(:userLoginResp, numToLogout)
+    timeDiff = System.system_time(:millisecond) - startTime
+    IO.puts "Logged in the same #{numToLogout} users in #{timeDiff}ms"
+
+    startTime = System.system_time(:millisecond)
     subscribeAllUsersTo(userList, listLoggedOut)
-    :timer.sleep(1000)
+    waitFor(:userFollowingResp, numUsers * length listLoggedOut)
+    timeDiff = System.system_time(:millisecond) - startTime
+    IO.puts "Every user followed #{numToLogout} users. Completed in #{timeDiff}ms"
+
+    #:timer.sleep(1000)
+    startTime = System.system_time(:millisecond)
     tweetRandom(userList,nTweets)
     tweetwithHashtag(userList,"#COP5615 is great")
     usersMentioned = tweetToRandUser(userList,userList)
-    :timer.sleep(2000)
+    waitFor(:userTweet, (numUsers+2)*nTweets)#Every user sends mention and hashtag once
+    timeDiff = System.system_time(:millisecond) - startTime
+    IO.puts "Every user tweeted #{nTweets+2} times.Total number #{(numUsers+2)*nTweets} . Completed in #{timeDiff}ms"
+
+    #:timer.sleep(2000)
+    startTime = System.system_time(:millisecond)
     queryByMention(usersMentioned)
+    waitFor(:queryTweet, length usersMentioned)
+    timeDiff = System.system_time(:millisecond) - startTime
+    IO.puts "#{length usersMentioned} users queried their mentions. Completed in #{timeDiff}ms"
+
+    startTime = System.system_time(:millisecond)
     randUser = Enum.random(userList)
-    {_,list,_} = queryByHashtag(randUser,"#COP5615")
-    retweetTweets(randUser,list)
+    #{_,list,_} =
+      queryByHashtag(randUser,"#COP5615")
+    waitFor(:queryTweet, 1)
+    timeDiff = System.system_time(:millisecond) - startTime
+    IO.puts "Random User#{randUser} queried #COP5615. Completed in #{timeDiff}ms"
+
+    startTime = System.system_time(:millisecond)
+    #retweetTweets(randUser,list)
+    timeDiff = System.system_time(:millisecond) - startTime
+    #IO.puts "User#{randUser} retweeted #{length list} tweets. Completed in #{timeDiff}ms"
     #GenServer.cast(:twitterServer, {:displayAllMentionsAndHashtags, "#COP5615"})
     #for i <- userList, do: GenServer.cast(:twitterServer, {:displayAllFollowing, i})
     :timer.sleep(:infinity)
@@ -30,7 +72,7 @@ defmodule Twitter.Main do
   def create_users(numUsers,nTweets,isOnline) do
     userId =  numUsers
     #Twitter.Client.sign_up(userId,nTweets,isOnline)
-    GenServer.call(:twitterServer,{:registerUser,userId,nTweets,isOnline}) |> IO.puts
+    GenServer.call(:twitterServer,{:registerUser,userId,nTweets,isOnline}) #|> IO.puts
     create_users(numUsers-1,nTweets,isOnline)
   end
 
@@ -42,7 +84,7 @@ defmodule Twitter.Main do
   end
 
   def logoutUsers(userList, 0) do
-    IO.puts "Logged out the users"
+    #IO.puts "Logged out the users"
     []
   end
 
@@ -53,7 +95,7 @@ defmodule Twitter.Main do
   end
 
   def loginUsers([]) do
-    IO.puts "Logged in the users"
+    #IO.puts "Logged in the users"
   end
 
   def loginUsers(listLoggedOut) do
@@ -80,12 +122,14 @@ defmodule Twitter.Main do
       [head|tail] = listToSubscribe
       if head !=userId do
         GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)), {:subscribe, head})
+      else
+        Twitter.Server.sendAcknowledgement(:userFollowingResp)
       end
       simulateSubscribe(userId, tail)
   end
 
   def tweetRandom([],_nTweets) do
-    IO.puts "Random tweeting done."
+    #IO.puts "Random tweeting done."
   end
 
   def tweetRandom(userList,nTweets) do
@@ -114,12 +158,12 @@ defmodule Twitter.Main do
     tweetwithHashtag(tail,tweet)
   end
 
-  def tweetToRandUser([],userList) do
+  def tweetToRandUser([],_userList) do
     []
   end
 
   def tweetToRandUser(usersLeft,userList) do
-    [userId|tail] = userList
+    [userId|tail] = usersLeft
     toUser = Enum.random(userList)
     tweet = "Hello there @User#{toUser}."
     GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)), {:sendTweet, tweet})
@@ -133,12 +177,12 @@ defmodule Twitter.Main do
   def queryByMention(userList) do
     [userId|tail] = userList
     key = "User"<>Integer.to_string(userId)
-    GenServer.call(String.to_atom("User"<>Integer.to_string(userId)), {:queryTweet, "@"<>key})
+    GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)), {:queryTweet, "@"<>key})
     queryByMention(tail)
   end
 
   def queryByHashtag(userId,key) do
-    GenServer.call(String.to_atom("User"<>Integer.to_string(userId)), {:queryTweet, key})
+    GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)), {:queryTweet, key})
   end
 
   def retweetTweets(_randUser,[]) do
@@ -147,8 +191,16 @@ defmodule Twitter.Main do
 
   def retweetTweets(userId,tweetList) do
     [head|tail] = tweetList
-    IO.puts "Tweet: #{head} User: #{userId}"
     GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)), {:sendRetweet, head})
     retweetTweets(userId,tail)
+  end
+
+  def waitFor(response, 0), do: nil
+  def waitFor(response, numUsers) do
+    receive do
+      {_response} -> []#IO.puts "Response #{numUsers}"
+      #{_} ->IO.puts "do nothing"
+    end
+    waitFor(response, numUsers-1)
   end
 end
