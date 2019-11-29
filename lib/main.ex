@@ -82,7 +82,7 @@ defmodule Twitter.Main do
       true -> List.delete(userList, userId)
     end
   end
-
+  
   def logoutUsers(userList, 0) do
     #IO.puts "Logged out the users"
     []
