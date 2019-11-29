@@ -25,12 +25,28 @@ defmodule Twitter.Client do
     Twitter.Server.retweet(userId,tweet)
   end
 
-  def get_state(pid) do
-    GenServer.call(pid,{:getState})
+  def tweet(userId,tweet) do
+      GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)), {:sendTweet, tweet})
+  end
+
+  def get_state(userId) do
+    GenServer.call(String.to_atom("User"<>Integer.to_string(userId)),{:getState})
   end
 
   def follow_user(userId,tofollowID) do
     Twitter.Server.add_follower(userId,tofollowID)
+  end
+
+  def retweet(userId,tweets) do
+    Enum.each(tweets,fn tweet ->
+      GenServer.cast(String.to_atom("User"<>Integer.to_string(userId)), {:sendRetweet, tweet})
+    end)
+  end
+
+  def queryMentions(userId) do
+    key = "User"<>Integer.to_string(2)
+    {_,mentionsList, _} = GenServer.call(String.to_atom("User"<>Integer.to_string(2)), {:queryTweet, "@"<>key})
+    mentionsList
   end
 
   def handle_call({:getState},_from,state) do
@@ -51,8 +67,8 @@ defmodule Twitter.Client do
     {:noreply, {userId, nTweets, false}}
   end
 
-  def handle_cast({:login,userId},state) do
-    {userId, nTweets, isOnline} = state
+  def handle_cast({:login,_userId},state) do
+    {userId, nTweets, _isOnline} = state
     IO.puts "User logged in: User#{userId}"
     {:noreply, {userId, nTweets, true}}
   end
@@ -63,7 +79,7 @@ defmodule Twitter.Client do
       GenServer.cast(:twitterServer,{:addFollower,userId,toFollowId})
       IO.puts "User#{userId} followed User#{toFollowId}."
     else
-      IO.puts
+      IO.puts " "
     end
     {:noreply, {userId, nTweets, true}}
   end
@@ -85,7 +101,7 @@ defmodule Twitter.Client do
   def handle_call({:queryTweet,key},_,state) do
     {userId, nTweets, isOnline} = state
     list = GenServer.call(:twitterServer,{:fetchAllMentionsAndHashtags,key})
-    {:reply, state, {userId, list, isOnline}}
+    {:reply,{userId, list, isOnline},state}
   end
 
   def start_link(userId,nTweets,isOnline) do
@@ -93,10 +109,6 @@ defmodule Twitter.Client do
     {:ok,pid}
   end
 
-  def start_link(userId,nTweets,isOnline) do
-    {:ok,pid} = GenServer.start_link(__MODULE__, {userId,nTweets,isOnline},[name: String.to_atom("User"<>Integer.to_string(userId))])
-    {:ok,pid}
-  end
 
   def init({userId,nTweets,isOnline}) do
     #handleLiveTweets()
